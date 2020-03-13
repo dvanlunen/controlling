@@ -1,0 +1,28 @@
+---
+title: "Get a Grip! When to Control for Variables in a Regression"
+output: html_notebook
+---
+
+
+
+- Causal or Predictive?
+  - If predictive, judge by out of sample fit and move on.
+  - If causal, read on.
+
+- why control?
+  - bias (confounders that are associated with treatment and outcomes)
+  http://sphweb.bumc.bu.edu/otlt/MPH-Modules/BS/BS704_Multivariable/BS704_Multivariable7.html
+    - regression allows us to see associations holding other things constant
+    - how to see if a confounder
+  
+  - precision
+    show the formula for variance of a coefficient and explain how controling for things could reduce the variance (though it could also increase the variance).
+
+- why not control?
+  - different interpretation 
+  - lose all your precision
+  - if downstream effect, losing the effect
+  - collider bias https://catalogofbias.org/biases/collider-bias/
+  
+  
+  Regression models make it easy to measure the effect of a treatment holding other variables fixed.
