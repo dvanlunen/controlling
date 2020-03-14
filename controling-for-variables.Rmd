@@ -2,17 +2,23 @@
 title: "Get a Grip! When to Control for Variables in a Regression"
 output: html_notebook
 ---
+```{r}
+library(tidyverse)
+library(glue)
+```
+
+
 https://pixabay.com/photos/mixer-dj-controller-buttons-4197733/
 
 
-Regression models make it easy to measure the effect of a treatment holding other variables fixed. But when and why should these covariates be included?
+Linear regression models make it easy to measure the effect of a treatment holding other variables fixed. But when and why should these covariates be included?
 
 This post will answer that question. 
 
 First, we'll talk about covariates in the context of prediction: add controls when they improve out of sample fit.
 
 
-Then, we'll discuss when you should use controls to measure a causal effect and when you shouldn't.
+Then, we'll discuss when you should use controls to measure a causal effect and when you shouldn't:
 Use controls
 - Add confounders that influence the treatment and the outcome to reduce bias
 - Add controls that are predictive of outcomes, but not treatment to increase precision.
@@ -31,7 +37,77 @@ Adding covariates reduces the bias in your predictions, but increases the varian
 Things get more complicated when you are trying to measure a causal effect.
 
 # Causal Effects
-Regressions are highly interpretable. Coefficients can easily be used to evaluate if a feature changed by one unit, how much would the predicted outcome change.
+Regressions are highly interpretable. It is easy to identify how the change of a variable in a regression is associated with a change in the outcome through the coefficients of the regression. For example, if you own a lot of grooming salons, you might consider whether or not you want to give dogs bandanas as they leave so they look cute. You want to know if giving bandanas will increase revenue so you run a regression:
+$$
+Revenue_{salon} \sim \beta_0 + \beta_1gives\_bandanas_{salon}
+$$
+Where gives_bandanas is a 0, 1 indicator variable whether or not the salon gives bandanas. \beta_1 will exactly tell you the impact on revenue that is associated with giving bandanas. 
+
+There are two key reasons why we might want to add covariates to this regression to help us determine how impactful bandanas are.
+1. to reduce bias
+2. to increase precision
+
+## Reducing Bias
+
+Confounders can make your treatment effect estimates incorrect if you don't account for them. A confounder is something that influences (causes) the value of both the treatment (exposure) and the outcome. 
+
+*picture https://catalogofbias.org/biases/collider-bias/ *
+
+For example, let's say customers in fancy neighborhoods are more inclined to request bandanas. Fancy neighborhoods also tend to have people that spend more money on dog grooms. Thus, fancy neighborhoods influence both the treatment (whether or not the salon gives bandanas) and the outcome (revenue) and is a confounder.
+
+Let's illustrate:
+
+```{r}
+# create a salon level dataset
+set.seed(20)
+n_salons <- 100
+noise <- 100
+true_bandana_effect <- 10000
+data <- tibble(salon_id = 1:n_salons) %>% 
+  mutate(
+    # confounder
+    fanciness=rnorm(n_salons, sd = noise),
+    # treatment (influenced by confounder)
+    #   if fanciness > 0, chance of bandana = 1 is .8, else .2
+    gives_bandanas=rbinom(n_salons, 1,prob =  ifelse(fanciness > 0, .8, .2)),
+    # outcome (influenced by confounder and treatment),
+    revenue=100*fanciness + true_bandana_effect*gives_bandanas + 50 + rnorm(n_salons, sd=noise)
+  )
+
+# plot to visualize the relationships
+data %>% 
+  mutate(treatment=ifelse(gives_bandanas==1, "bandanas", "no bandanas")) %>% 
+  ggplot(aes(fanciness, revenue, color=treatment)) +
+  geom_point() +
+  labs(title=glue("Bandanas have a {true_bandana_effect} on Revenue (distance between red and blue curves)\n",
+                  "Bandanas more likely in fancier areas (more red dots on right than left as compared to blue dots)\n",
+                  "Revenue increases in fanciness"))
+```
+
+Now let's see what would happen if we don't control for fanciness.
+
+```{r}
+m_confounded <- lm(revenue ~ gives_bandanas, data=data)
+summary(m_confounded)
+```
+
+The true effect of gives_bandanas is a \$10000 increase to revenue, but we measured a much larger effect. In fact, the true effect doesn't even fall in our models 95% confidence interval for the effect. But what if we add fanciness to the regression?
+
+```{r}
+m_controlled <- lm(revenue ~ gives_bandanas + fanciness, data=data)
+summary(m_controlled)
+```
+
+Now we have an accurate measurement of the effect!
+
+A good way for checking for such confounds is running the regression with and without them. If the coefficient of interest (eg on gives_bandanas) changes a lot, its a sign that bias is present.
+
+Extension: check my stats stackexhange post to see what mathematical assumptions are required for unbiased coefficients https://stats.stackexchange.com/questions/16381/what-is-a-complete-list-of-the-usual-assumptions-for-linear-regression/400600#400600 . The key assumption is strict exogeneity (similar to no correlation between the variable of interest like gives_bandanas and other variables that are not controlled for in the regression, but that also impact the outcome).
+
+
+Adding covariates isn't only good for reducing bias, it can also be useful to improve precision.
+
+##
 
 
 

@@ -1,0 +1,100 @@
+---
+title: "How to Interpret Impacts in a Linear Regression"
+output: html_notebook
+---
+
+
+Linear regressions are very interpretable. Using the coefficients, we can determine how a change in an input x is associated with a change in the outcome y. The following summarizes how to evaluate what change in the outcome would result from a change in the input x for the most common situations. z is another input we are holding fixed.
+$$
+\begin{aligned}
+
+\text{simple}\\
+y \sim~ \beta_0 + \beta_1 x  :& \text{ If }x\text{ increases by 1, it is associated with a } \beta_1 \text{ increase in } y \\
+\text{log covariate} \\
+y\sim~ \beta_0 + \beta_1 logx  :& \text{ If }x\text{ increases by 1%, it is associated with a } \frac{\beta_1}{100} \text{ increase in } y \\
+\text{polynomial covariate}\\
+y \sim~ \beta_0 + \beta_1 x + \beta_2 x^2  : & \text{ If }x\text{ increases by 1, it is associated with a } \beta_1+2\beta_2x \text{ increase in } y \\
+\text{interaction}\\
+y \sim~ \beta_0 + \beta_1 x + \beta_2 z + \beta_3 xz  : & \text{ If }x\text{ increases by 1, it is associated with a } \beta_1+\beta_3z \text{ increase in } y \\
+
+\end{aligned}
+$$
+log outcomes
+$$
+\begin{aligned}
+
+\text{simple}\\
+logy \sim~ \beta_0 + \beta_1 x  :& \text{ If }x\text{ increases by 1, it is associated with a } 100\beta_1\% \text{ increase in } y \\
+\text{log covariate} \\
+logy\sim~ \beta_0 + \beta_1 logx  :& \text{ If }x\text{ increases by 1%, it is associated with a } \beta_1\% \text{ increase in } y \\
+\text{polynomial covariate}\\
+logy \sim~ \beta_0 + \beta_1 x + \beta_2 x^2  : & \text{ If }x\text{ increases by 1, it is associated with a } 100(\beta_1+2\beta_2x)\% \text{ increase in } y \\
+\text{interaction}\\
+logy \sim~ \beta_0 + \beta_1 x + \beta_2 z + \beta_3 xz  : & \text{ If }x\text{ increases by 1, it is associated with a } 100(\beta_1+\beta_3z)\% \text{ increase in } y \\
+
+\end{aligned}
+$$
+
+Where do these rules come from? Is there a way I can derive them without memorizing them?
+
+Yes, we can come up with them on our own by differentiating the regression equation.
+
+For example,
+
+$$
+y \sim~ \beta_0 + \beta_1 x \\
+dy = \beta_1 dx \\
+$$
+So if x changes by 1 (think: dx = 1), then y changes by (think dy=) \beta_1.
+
+Specifically,
+
+$$
+\int_{x_1}^{x_1+1} \frac{dy}{dx}dx = \int_{x_1}^{x_1+1} \beta_1dx=\beta_1x|_{x_1}^{x_1+1}=\beta_1(x_1+1)-\beta_1x_1=\beta_1
+$$
+
+Now let's see how this works in the other cases:
+
+## Logs
+
+### Level log regression
+$$
+y \sim~ \beta_0 + \beta_1 logx \\
+dy = \beta_1 \frac{dx}{x}
+$$
+Here we can see if x increases by 1% (think dx=1%*x), y changes by \beta_1. This is becaus there is an x in the denominator on the right hand side.
+
+$$
+\int_{x_1}^{1.01x_1} \frac{dy}{dx}dx = \int_{x_1}^{1.01x_1} \beta_1\frac{dx}{x}=\beta_1log(x)|_{x_1}^{1.01x_1}=\beta_1log(1.01x_1)-\beta_1log(x_1)=\beta_1
+$$
+
+### Log level
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
