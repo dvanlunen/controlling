@@ -2,6 +2,37 @@
 title: "Get a Grip! When to Control for Variables in a Regression"
 output: html_notebook
 ---
+https://pixabay.com/photos/mixer-dj-controller-buttons-4197733/
+
+
+Regression models make it easy to measure the effect of a treatment holding other variables fixed. But when and why should these covariates be included?
+
+This post will answer that question. 
+
+First, we'll talk about covariates in the context of prediction: add controls when they improve out of sample fit.
+
+
+Then, we'll discuss when you should use controls to measure a causal effect and when you shouldn't.
+Use controls
+- Add confounders that influence the treatment and the outcome to reduce bias
+- Add controls that are predictive of outcomes, but not treatment to increase precision.
+
+Don't use controls
+- Don't add downstream effects of the treatment that also influence outcomes because you won't measure the full impact of treatment
+- Don't add colliders that are caused by both treatment and the outcome because you may end up inducing a spurious relationship between treatment and outcomes.
+
+# Prediction: Out of Sample Performance
+If you are not influencing the value of any of the variables in the regression, you might only care about prediction. For example, if you were looking to sell an apartment, you might want to predict the sale price. You could train a regression on the sale price of other apartments including covariates like the number of bedrooms. In this case, you probably only care about getting a good prediction of the sale price. You likely are not looking to evaluate if you added another bedroom, how much more could you sell for (which, by contrast would be a causal problem).
+
+It is easy to decide whether or not a covariate should be added to a regression if all you care about is predicting an outcome. Simply separate your data into a training set and a test set. Train the model with the covariate and without using the training data. Whichever model does a better job predicting in the test data should be used. 
+
+Adding covariates reduces the bias in your predictions, but increases the variance. Out of sample fit is the judge of this tradeoff. If you have many variables, techniques like L1 regularization can help determine which to include.
+
+Things get more complicated when you are trying to measure a causal effect.
+
+# Causal Effects
+Regressions are highly interpretable. Coefficients can easily be used to evaluate if a feature changed by one unit, how much would the predicted outcome change.
+
 
 
 
@@ -25,4 +56,4 @@ output: html_notebook
   - collider bias https://catalogofbias.org/biases/collider-bias/
   
   
-  Regression models make it easy to measure the effect of a treatment holding other variables fixed.
+  
