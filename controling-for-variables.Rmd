@@ -13,19 +13,22 @@ https://pixabay.com/photos/mixer-dj-controller-buttons-4197733/
 
 Linear regression models make it easy to measure the effect of a treatment holding other variables fixed. But when and why should these covariates be included?
 
-This post will answer that question. 
+This post will answer that question:
+
+
 
 First, we'll talk about covariates in the context of prediction: add controls when they improve out of sample fit.
 
-
 Then, we'll discuss when you should use controls to measure a causal effect and when you shouldn't:
-Use controls
+Bias
 - Add confounders that influence the treatment and the outcome to reduce bias
-- Add controls that are predictive of outcomes, but not treatment to increase precision.
-
-Don't use controls
 - Don't add downstream effects of the treatment that also influence outcomes because you won't measure the full impact of treatment
-- Don't add colliders that are caused by both treatment and the outcome because you may end up inducing a spurious relationship between treatment and outcomes.
+- Don't add colliders that are caused by both treatment and the outcome because you may end up inducing a spurious relationship between treatment and outcomes
+
+Precision
+- Add controls that are predictive of outcomes, but not treatment to increase precision
+- Don't add controls that are predicitve of treatment, but not outcomes
+
 
 # Prediction: Out of Sample Performance
 If you are not influencing the value of any of the variables in the regression, you might only care about prediction. For example, if you were looking to sell an apartment, you might want to predict the sale price. You could train a regression on the sale price of other apartments including covariates like the number of bedrooms. In this case, you probably only care about getting a good prediction of the sale price. You likely are not looking to evaluate if you added another bedroom, how much more could you sell for (which, by contrast would be a causal problem).
@@ -43,12 +46,13 @@ Revenue_{salon} \sim \beta_0 + \beta_1gives\_bandanas_{salon}
 $$
 Where gives_bandanas is a 0, 1 indicator variable whether or not the salon gives bandanas. \beta_1 will exactly tell you the impact on revenue that is associated with giving bandanas. 
 
-There are two key reasons why we might want to add covariates to this regression to help us determine how impactful bandanas are.
-1. to reduce bias
-2. to increase precision
+The reasons for adding or not adding controls to a regression generally fall into two categories:
+1- Getting the Measurement right (eg reducing bias)
+2- Precision of effect measurement
 
-## Reducing Bias
+## Getting the Measurment Right
 
+### Add Confounders that Could Bias the Estimate
 Confounders can make your treatment effect estimates incorrect if you don't account for them. A confounder is something that influences (causes) the value of both the treatment (exposure) and the outcome. 
 
 *picture https://catalogofbias.org/biases/collider-bias/ *
@@ -63,7 +67,7 @@ set.seed(20)
 n_salons <- 100
 noise <- 100
 true_bandana_effect <- 10000
-data <- tibble(salon_id = 1:n_salons) %>% 
+data_confounder <- tibble(salon_id = 1:n_salons) %>% 
   mutate(
     # confounder
     fanciness=rnorm(n_salons, sd = noise),
@@ -75,26 +79,27 @@ data <- tibble(salon_id = 1:n_salons) %>%
   )
 
 # plot to visualize the relationships
-data %>% 
+data_confounder %>% 
   mutate(treatment=ifelse(gives_bandanas==1, "bandanas", "no bandanas")) %>% 
   ggplot(aes(fanciness, revenue, color=treatment)) +
   geom_point() +
-  labs(title=glue("Bandanas have a {true_bandana_effect} on Revenue (distance between red and blue curves)\n",
+  labs(title=glue("Bandanas have a +{true_bandana_effect} Impact on Revenue (distance between red and blue curves)\n",
                   "Bandanas more likely in fancier areas (more red dots on right than left as compared to blue dots)\n",
-                  "Revenue increases in fanciness"))
+                  "Revenue increases in fanciness")) +
+  geom_rug()
 ```
 
 Now let's see what would happen if we don't control for fanciness.
 
 ```{r}
-m_confounded <- lm(revenue ~ gives_bandanas, data=data)
+m_confounded <- lm(revenue ~ gives_bandanas, data=data_confounder)
 summary(m_confounded)
 ```
 
 The true effect of gives_bandanas is a \$10000 increase to revenue, but we measured a much larger effect. In fact, the true effect doesn't even fall in our models 95% confidence interval for the effect. But what if we add fanciness to the regression?
 
 ```{r}
-m_controlled <- lm(revenue ~ gives_bandanas + fanciness, data=data)
+m_controlled <- lm(revenue ~ gives_bandanas + fanciness, data=data_confounder)
 summary(m_controlled)
 ```
 
@@ -104,32 +109,191 @@ A good way for checking for such confounds is running the regression with and wi
 
 Extension: check my stats stackexhange post to see what mathematical assumptions are required for unbiased coefficients https://stats.stackexchange.com/questions/16381/what-is-a-complete-list-of-the-usual-assumptions-for-linear-regression/400600#400600 . The key assumption is strict exogeneity (similar to no correlation between the variable of interest like gives_bandanas and other variables that are not controlled for in the regression, but that also impact the outcome).
 
+However, we want to be careful: controlling for downstream outcomes can distort our estimated treatment effect.
 
-Adding covariates isn't only good for reducing bias, it can also be useful to improve precision.
+### Down Add Downstream Outcomes 
+If we add variables that are caused by our treatment and influence the outcome, we will remove the effect our treatment has on the outcome *through* the added variable. For example, let's imagine a case where giving dogs bandanas causes customers to be more likely to come back to the salon and that revenue is influenced by how many customers return. Let's see how the effect of giving bandanas is lost when we add the return rate as a covariate.
 
-##
+```{r}
+# create a salon level dataset
+set.seed(22)
+n_salons <- 200
+true_bandana_effect <- 100
+noise <- 50
+data_downstream <- tibble(salon_id = 1:n_salons) %>% 
+  mutate(
+    # treatment (random in this case)
+    gives_bandanas=rbinom(n_salons, 1,prob =  0.5),
+    # downstream return rate increased by 10% if given bandanas
+    return_rate=rnorm(n_salons, mean = 0.5, sd=0.1) + gives_bandanas*0.1 ,
+    # outcome (influenced by return rate)
+    #   note that bandanas only impact revenue through return rate
+    revenue= 50 + true_bandana_effect*10*return_rate + rnorm(n_salons, sd=noise)
+  )
+
+# plot to visualize the relationships
+data_downstream %>% 
+  mutate(treatment=ifelse(gives_bandanas==1, "bandanas", "no bandanas")) %>% 
+  ggplot(aes(return_rate, revenue, color=treatment)) +
+  geom_point() +
+  labs(title=glue("Bandanas have a +{true_bandana_effect} effect on Revenue \n",
+                  "But the effect is through return rate\n")) +
+  geom_rug()
+```
+
+Let's see how running the regression works here:
+
+```{r}
+m_no_downstream <- lm(revenue ~ gives_bandanas, data=data_downstream)
+summary(m_no_downstream)
+```
+We get an estimated effect that is very close to the true +100 effect when we don't include the downstream variable.
+
+```{r}
+m_downstream <- lm(revenue ~ gives_bandanas + return_rate, data=data_downstream)
+summary(m_downstream)
+```
+
+Adding the return_rate to the regression eliminates the effect of giving bandanas. This is because holding return_rate fixed, giving bandanas doesn't actually have an impact. But we are still interested in the effect of giving bandanas (even if through other variables) so we shouldnt control for downstream effects.
+
+The other situation where we need to be careful about a distored association is when we add colliders to our regression.
+
+### Don't add Colliders
+
+A collider is a variable that is influenced by both the treatment and the outcome. Adding a collider to a regression can distort the measured association between the treatment and outcome. For example, whether a salon as a storage closet or not. If the store gives bandanas, that likely need a clost to store it in and therefore giving bandanas influences whether or not there is a storage closet. Also, salons that have a lot of revenue likely see more customers, who leave things behind and thus they need a place to store lost and found items. Let's consider an example where bandanas don't have any impact on revenue, but where an association can be found if we accidentally control for this collider.
+
+```{r}
+set.seed(24)
+true_bandana_effect <- 0
+noise <- 10
+n_salons <- 200
+data_collider <- tibble(salon_id = 1:n_salons) %>% 
+  mutate(
+    # treatment (random in this case)
+    gives_bandanas=rbinom(n_salons, 1,prob =  0.5),
+    # outcome (not impacted by treatment)
+    revenue= 50 + rnorm(n_salons, sd=noise),
+    # collider
+    storage=revenue + 10*gives_bandanas + rnorm(n_salons, sd=noise)
+  )
+# plot to visualize the relationships
+data_collider %>% 
+  mutate(treatment=ifelse(gives_bandanas==1, "bandanas", "no bandanas")) %>% 
+  ggplot(aes(storage, revenue, color=treatment)) +
+  geom_point() +
+  labs(title=glue("Bandanas have no effect on Revenue \n",
+                  "But Revenue and Bandanas Impact Storage\n")) +
+  geom_rug()
+```
+
+The regression works fine without a collider
+
+```{r}
+m_no_collider <- lm(revenue ~ gives_bandanas, data=data_collider)
+summary(m_no_collider)
+```
+We don't measure any effect of giving bandanas then the collider is not included. This a good thing because in the data bandanas have no effect of revenue. But what happens when we add the collider?
+
+```{r}
+m_collider <- lm(revenue ~ gives_bandanas + storage, data=data_collider)
+summary(m_collider)
+```
+
+Now we measure a significant negative association between giving bandanas and revenue that does not actually exist. This is because of the "holding fixed" interpretation of a regression. For a given value of storage, revenue is negatively associated with giving bandanas.
+
+Knowing whether or not to add covariates to accurately measure an effect is the most important, but it is also important to know when a covariate could increase the precision of your estimates.
+
+## Covariates Impact of Precision
+
+Covariates can increase the precision with which you estimate a particular coefficient if they are predictive of the outcome and not highly correlated with the variable whose coefficient you are trying to estimate.
 
 
+This result may seem counterintuitive: isn't adding covariates supposed to increase variance and therefore reduce precision? That's true in terms of the predictions of the outcome the model produces, but not the estimates of the coefficients in the regression. 
+
+If we meet some standard assumptions of ordinary least squares (the relationship between our outcome and covariates is linear, the units are not impacting each other, there is no correlation between the treatment and other covariates that impact the outcome, homoskedasticty -- see my stats stackexchange post for all assumptions and implications https://stats.stackexchange.com/questions/16381/what-is-a-complete-list-of-the-usual-assumptions-for-linear-regression/400600#400600) the variance of the OLS estimate of the coefficient on the treatment is:
+
+$$
+Var(\hat{\beta}_{gives\_bandanas}) = \frac{\sigma^2}{(1-R^2_{gives\_bandanas})\sum_{salons}(gives\_bandanas_{salon} - \%gives\_bandanas)^2}
+$$
+
+The sum in the denominator refers to how much variance there is in the application of our treatment (giving bandanas). This is not related to what covariates we add.
+
+$\sigma^2$ is the error variance of the regression. The better we are at making predicitions of the outcome with the regression, the lower this value will be. Therefore, if we add covariates that are highly predictive of the outcome $\sigma^2$ will decrease.
+
+However, $R^2_{gives\_bandanas}$ represents the R^2 if we ran a regression with gives_bandanas as the outcome and all the other covariates as explanatory variables. This means that if we add covariates that are highly correlated with the treatment (gives_bandanas) our estimate of the coefficient on the treatment will have a higher variance. This speaks to the fact that you should not add variables that are highly correlated with the treatment, unless they are confounders that are also highly correlated to the outcome.
+
+Let's illustrate. Suppose giving bandanas is not correlated with the number of dogs where the salon is, but salon revenue is (adding number of dogs to the regression will increase precision). Also, suppose that whether or not the salon gets ads from local bandana suppliers influences whether or not the salon gives bandanas, but does not affect the salons revenue directly (adding whether the salon received ads will reduce precision).
 
 
-- Causal or Predictive?
-  - If predictive, judge by out of sample fit and move on.
-  - If causal, read on.
+```{r}
+set.seed(20)
+true_bandana_effect <- 5
+noise <- 10
+n_salons <- 101
+data_precision <- tibble(salon_id = 1:n_salons) %>% 
+  mutate(
+    # random number of dogs
+    number_of_dogs=round(rnorm(n_salons, mean=100, sd=10)),
+    # random chance of seeing ad
+    saw_bandanas_ad=rbinom(n_salons, 1,prob =  0.5),
+    # treatment more likely when saw ad, not impacted by number of dogs
+    gives_bandanas=rbinom(n_salons, 1,prob =  ifelse(saw_bandanas_ad==1, .8, .2)),
+    # outcome (not impacted by ad, but impacted by number of dogs)
+    revenue= 50 + rnorm(n_salons, sd=noise) + true_bandana_effect*gives_bandanas + number_of_dogs
+  )
+# plot to visualize the relationships
+data_precision %>% 
+  mutate(
+    treatment=ifelse(gives_bandanas==1, "bandanas", "no bandanas"),
+    `ad?`=ifelse(saw_bandanas_ad==1,"saw ad", "no ad")
+         ) %>% 
+  ggplot(aes(number_of_dogs, revenue, color=treatment)) +
+  geom_point(aes( shape=`ad?`)) +
+  geom_smooth(method='lm',se=F,linetype='dashed') +
+  labs(title=glue("Bandanas have +{true_bandana_effect} effect on Revenue (distance between colors)\n",
+                  "Ad Impacts Bandanas (more red triangles than red circles)\n",
+                  "Number of Dogs Impacts Revenue, but Not Bandanas (similar slope by color)"),
+       caption="dashed lines show ols best fit for each color") +
+  geom_rug()
 
-- why control?
-  - bias (confounders that are associated with treatment and outcomes)
-  http://sphweb.bumc.bu.edu/otlt/MPH-Modules/BS/BS704_Multivariable/BS704_Multivariable7.html
-    - regression allows us to see associations holding other things constant
-    - how to see if a confounder
-  
-  - precision
-    show the formula for variance of a coefficient and explain how controling for things could reduce the variance (though it could also increase the variance).
+```
 
-- why not control?
-  - different interpretation 
-  - lose all your precision
-  - if downstream effect, losing the effect
-  - collider bias https://catalogofbias.org/biases/collider-bias/
+Let's start with a regression using just treatment.
+
+```{r}
+m_precision_just_treatment <- lm(
+  revenue ~ gives_bandanas, data=data_precision
+)
+summary(m_precision_just_treatment)
+```
+We measure an accurate effect fairly close to the ture impact of 5.
+
+Now let's add the predictive covariate.
+```{r}
+m_precision_w_predictor <- lm(
+  revenue ~ gives_bandanas + number_of_dogs, data=data_precision
+)
+summary(m_precision_w_predictor)
+```
+Now we measure an effect much more precisely! The coefficient on gives_bandanas is much closer to 5 with a lower standard error.
+
+But what if we had added a non-predictor that was correlated with treatment instead?
+```{r}
+m_precision_w_non_predictor <- lm(
+  revenue ~ gives_bandanas + saw_bandanas_ad, data=data_precision
+)
+summary(m_precision_w_non_predictor)
+```
+Now we have less precision and are further away from the true effect of 5.
+
+# Summary
+
+To summarize, please reference the chart below. If you would like to learn more about experiments check out my other posts:
+Practical Experiment Fundamentals All Data Scientists Should Know
+https://towardsdatascience.com/practical-experiment-fundamentals-all-data-scientists-should-know-f11c77fea1b2
+An Experiment Assignment Method All Data Scientists Should Know
+https://towardsdatascience.com/an-experiment-assignment-method-all-data-scientists-should-know-e4d57d96b26b
+
   
   
   
